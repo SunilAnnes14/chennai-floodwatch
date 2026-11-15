@@ -24,7 +24,15 @@ if os.environ.get("VERCEL") and not (os.environ.get("DATABASE_URL") or os.enviro
             "detail": "Database not connected: in Vercel open your project -> Storage -> connect a Neon "
                       "Postgres database (it sets DATABASE_URL), then redeploy."})
 else:
+    import main  # noqa: E402
     from main import app, startup  # noqa: E402,F401  (Vercel looks for the variable "app")
 
-    # Create tables, the admin from settings, and load the terrain grid - once per new server
-    startup()
+    # Create tables, the admin from settings, and load the terrain grid - once per new server.
+    # If this fails (e.g. the database can't be reached), the site keeps running and
+    # /api/health shows the error instead of every page crashing.
+    try:
+        startup()
+    except Exception as error:  # noqa: BLE001
+        main.startup_error["message"] = f"{type(error).__name__}: {error}"
+        main._started["done"] = False  # try again on the next request's server start
+        print("Startup failed:", main.startup_error["message"])

@@ -31,7 +31,7 @@ import routing  # noqa: E402
 import streets  # noqa: E402
 import terrain  # noqa: E402
 from auth import check_password, hash_password, make_token, require_admin  # noqa: E402
-from database import create_tables, get_connection  # noqa: E402
+from database import create_tables, get_connection, using_postgres  # noqa: E402
 from risk import calculate_risk  # noqa: E402
 from weather import WeatherError, get_weather, load_elevations  # noqa: E402
 
@@ -76,6 +76,7 @@ def run_terrain_build():
 
 
 _started = {"done": False}
+startup_error = {"message": None}   # filled by api/index.py if starting up online failed
 
 
 @app.on_event("startup")
@@ -217,10 +218,28 @@ def geocode(place):
 
 @app.get("/api/health")
 def health():
-    conn = get_connection()
-    conn.execute("SELECT 1")
-    conn.close()
-    return {"status": "ok", "time": now_text()}
+    """Is the server working? Shows the database type and, online, any start-up problem."""
+    if startup_error["message"]:  # starting up failed earlier: try once more
+        try:
+            startup()
+            startup_error["message"] = None
+        except Exception as error:  # noqa: BLE001
+            _started["done"] = False
+            startup_error["message"] = f"{type(error).__name__}: {error}"
+    try:
+        conn = get_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        database = "ok"
+    except Exception as error:  # noqa: BLE001
+        database = f"failed: {type(error).__name__}: {error}"
+    ok = database == "ok" and not startup_error["message"]
+    body = {"status": "ok" if ok else "error", "time": now_text(), "database": database,
+            "database_type": "postgresql" if using_postgres() else "sqlite",
+            "startup_error": startup_error["message"]}
+    if not ok:
+        raise HTTPException(503, body)
+    return body
 
 
 @app.get("/api/areas")
