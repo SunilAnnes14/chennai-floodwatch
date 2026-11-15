@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------
+   Reusable styles. Use these class names on every page so the whole
+   site looks the same (e.g. <div className="card">).
+   ------------------------------------------------------------------ */
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl border border-slate-200/80 shadow-soft p-5;
+  }
+  .card-hover {
+    @apply transition duration-200 hover:-translate-y-0.5 hover:shadow-lift hover:border-slate-300;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold
+           text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-700 active:scale-[.98]
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5
+           text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300
+           active:scale-[.98];
+  }
+  .btn-light { @apply btn-ghost; } /* older name, kept so nothing breaks */
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm
+           transition placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4
+           focus:ring-blue-500/15;
+  }
+  .label { @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.16em] text-blue-600; }
+  .title { @apply font-display text-3xl font-bold tracking-tight text-navy-900; }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs
+           font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900;
+  }
+  .chip-active { @apply border-navy-900 bg-navy-900 text-white hover:text-white; }
+  .page { @apply animate-fade-up; }
+}
+
+html { scroll-behavior: smooth; }
+
+/* People who turn on "reduce motion" on their device get no animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+body { @apply bg-[#f5f7fb] text-slate-700 antialiased; }
+h1, h2, h3 { @apply font-display; }
+
+/* ---------------- Leaflet map styling ---------------- */
+.leaflet-container { height: 100%; width: 100%; z-index: 0; font-family: Inter, system-ui, sans-serif; background: #eef2f6; }
+.forecast-field { image-rendering: auto; }
+.basemap-soft { filter: saturate(0.3) brightness(1.04) contrast(0.9); }
+.leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 12px 32px -12px rgba(16,33,63,.35); }
+.leaflet-popup-content { margin: 12px 14px; font-size: 13px; line-height: 1.5; }
+.leaflet-control-zoom { border: none !important; box-shadow: 0 4px 14px -6px rgba(16,33,63,.35) !important; border-radius: 12px !important; overflow: hidden; }
+.leaflet-control-zoom a { width: 34px !important; height: 34px !important; line-height: 34px !important; color: #10213f !important; }
