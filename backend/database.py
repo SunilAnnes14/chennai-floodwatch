@@ -263,6 +263,11 @@ def create_tables():
     })
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS alerts_dedupe ON alerts(dedupe_key) WHERE dedupe_key IS NOT NULL")
 
+    # Online, several servers can start at the same moment and each load the terrain grid.
+    # Remove any copies, then make each grid point unique so it can't happen again.
+    conn.execute("DELETE FROM grid_cells WHERE id NOT IN (SELECT MIN(id) FROM grid_cells GROUP BY latitude, longitude)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS grid_cells_point ON grid_cells(latitude, longitude)")
+
     # Add the 8 focus areas once. Coordinates are approximate neighbourhood
     # centres taken from OpenStreetMap.
     focus_areas = [

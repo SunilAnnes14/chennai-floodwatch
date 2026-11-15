@@ -77,6 +77,22 @@ def test_ready_made_terrain_grid_loads(client):
     assert data["built"] is True and len(data["cells"]) > 1000
 
 
+def test_grid_loaded_by_several_servers_has_no_copies(client):
+    """Online, several servers may load the grid at the same moment (this once made 8 copies)."""
+    from database import create_tables
+    assert terrain.load_saved_grid()
+    total = len(client.get("/api/terrain").json()["cells"])
+    assert terrain.load_saved_grid() and terrain.load_saved_grid()   # loading again...
+    conn = get_connection()
+    conn.execute("DROP INDEX grid_cells_point")                      # ...or an old database with copies
+    conn.execute("INSERT INTO grid_cells (latitude, longitude, elevation_m, score, level) "
+                 "SELECT latitude, longitude, elevation_m, score, level FROM grid_cells")
+    conn.commit()
+    conn.close()
+    create_tables()                                                   # the next start cleans it up
+    assert len(client.get("/api/terrain").json()["cells"]) == total
+
+
 def load_vercel_entry(name):
     path = os.path.join(os.path.dirname(__file__), "..", "api", "index.py")
     spec = importlib.util.spec_from_file_location(name, path)

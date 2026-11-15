@@ -108,7 +108,8 @@ def create_admin_from_settings():
         return
     conn = get_connection()
     if not conn.execute("SELECT 1 FROM admins WHERE email = ?", (email,)).fetchone():
-        conn.execute("INSERT INTO admins (email, password_hash, created_at) VALUES (?, ?, ?)",
+        # ON CONFLICT DO NOTHING: another server may create the same admin at the same moment
+        conn.execute("INSERT INTO admins (email, password_hash, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
                      (email, hash_password(password), now_text()))
         conn.commit()
     conn.close()

@@ -181,8 +181,9 @@ def save_cells(cells):
     """Replace the grid in the database with `cells` (a list of rows in CELL_COLUMNS order)."""
     conn = get_connection()
     conn.execute("DELETE FROM grid_cells")
-    conn.executemany(f"INSERT INTO grid_cells ({', '.join(CELL_COLUMNS)}) VALUES ({', '.join('?' * len(CELL_COLUMNS))})",
-                     [tuple(c) for c in cells])
+    # ON CONFLICT DO NOTHING: if another server is loading the grid at the same time, no copies are made
+    conn.executemany(f"INSERT INTO grid_cells ({', '.join(CELL_COLUMNS)}) VALUES ({', '.join('?' * len(CELL_COLUMNS))}) "
+                     "ON CONFLICT DO NOTHING", [tuple(c) for c in cells])
     conn.commit()
     conn.close()
 
