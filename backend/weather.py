@@ -78,10 +78,11 @@ def get_weather():
         future = [r for h, r in zip(hours, rain) if h > now]
         future_chance = [c for h, c in zip(hours, chance) if h > now and c is not None]
 
-        # save past hours to the database (history)
-        for h, r in zip(hours, rain):
-            if h <= now:
-                conn.execute("INSERT OR REPLACE INTO rainfall VALUES (?, ?, ?)", (area["id"], h, r))
+        # save past hours to the database (history); an hour saved before is updated
+        conn.executemany(
+            "INSERT INTO rainfall (area_id, time, precipitation_mm) VALUES (?, ?, ?) "
+            "ON CONFLICT (area_id, time) DO UPDATE SET precipitation_mm = excluded.precipitation_mm",
+            [(area["id"], h, r) for h, r in zip(hours, rain) if h <= now])
 
         output.append({
             "area_id": area["id"],

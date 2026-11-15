@@ -12,7 +12,7 @@ function ClickToPick({ onPick }) {
   return null;
 }
 
-const MAX_MB = 5;
+const MAX_MB = 4; // the online server (Vercel) accepts uploads up to 4.5 MB
 const EMPTY_FORM = { location_text: "", water_depth_cm: "", severity: "", description: "" };
 const SEVERITIES = [
   ["LOW", "Low", "Passable with care"],

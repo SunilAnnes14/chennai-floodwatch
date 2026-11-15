@@ -172,6 +172,32 @@ def fetch_elevations(points):
 
 
 HEIGHTS_FILE = os.path.join(DATA_DIR, "grid_heights.json")
+CELLS_FILE = os.path.join(DATA_DIR, "grid_cells.json")   # the finished grid, ready to load
+CELL_COLUMNS = ["latitude", "longitude", "elevation_m", "height_above_water_m",
+                "water_distance_m", "nearest_water", "score", "level"]
+
+
+def save_cells(cells):
+    """Replace the grid in the database with `cells` (a list of rows in CELL_COLUMNS order)."""
+    conn = get_connection()
+    conn.execute("DELETE FROM grid_cells")
+    conn.executemany(f"INSERT INTO grid_cells ({', '.join(CELL_COLUMNS)}) VALUES ({', '.join('?' * len(CELL_COLUMNS))})",
+                     [tuple(c) for c in cells])
+    conn.commit()
+    conn.close()
+
+
+def load_saved_grid():
+    """Load the ready-made grid from data/grid_cells.json (no internet needed). Returns True if it worked."""
+    if not os.path.exists(CELLS_FILE):
+        return False
+    with open(CELLS_FILE, encoding="utf-8") as f:
+        saved = json.load(f)
+    if saved.get("columns") != CELL_COLUMNS or not saved.get("cells"):
+        return False
+    save_cells(saved["cells"])
+    print(f"Loaded {len(saved['cells'])} terrain grid cells from {os.path.basename(CELLS_FILE)}")
+    return True
 
 
 def grid_points():
@@ -226,12 +252,10 @@ def build_grid():
                       round(height_above_water, 1) if height_above_water is not None else None,
                       round(water_distance) if water_distance is not None else None, water_name, score, level))
 
-    conn = get_connection()
-    conn.execute("DELETE FROM grid_cells")
-    conn.executemany("""INSERT INTO grid_cells (latitude, longitude, elevation_m, height_above_water_m,
-                        water_distance_m, nearest_water, score, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", cells)
-    conn.commit()
-    conn.close()
+    save_cells(cells)
+    # Also keep a copy in data/grid_cells.json: the online server loads this instead of rebuilding
+    with open(CELLS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"columns": CELL_COLUMNS, "cells": cells}, f)
     counts = {lvl: sum(1 for c in cells if c[7] == lvl) for lvl in ("LOW", "MEDIUM", "HIGH")}
     print(f"Done: {len(cells)} cells saved ({counts}), {len(water)} water features used.")
     return {"cells": len(cells), "levels": counts, "water_features": [w["name"] for w in water]}

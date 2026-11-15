@@ -11,6 +11,14 @@ import tempfile
 
 os.environ["FLOODWATCH_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
 os.environ["SKIP_ELEVATION"] = "1"
+# To run the same tests against PostgreSQL:  set TEST_DATABASE_URL=postgresql://...  then pytest
+if os.environ.get("TEST_DATABASE_URL"):
+    os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+else:
+    # Empty (not removed) so a DATABASE_URL in backend/.env can NEVER be picked up:
+    # the tests delete data and must never touch the real online database.
+    os.environ["DATABASE_URL"] = ""
+os.environ["POSTGRES_URL"] = ""
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -22,7 +30,6 @@ from auth import hash_password  # noqa: E402
 from database import get_connection  # noqa: E402
 from risk import calculate_risk  # noqa: E402
 
-main.UPLOAD_DIR = tempfile.mkdtemp()  # test photos go to a temporary folder, not backend/uploads
 
 GOOD_REPORT = {"location_text": "Velachery Main Road", "latitude": "12.98", "longitude": "80.22",
                "water_depth_cm": "40", "severity": "HIGH", "description": "Knee-deep water"}
@@ -42,7 +49,6 @@ def no_internet(*args, **kwargs):
 
 @pytest.fixture(autouse=True)
 def fresh_start(monkeypatch):
-    main._report_times.clear()
     weather._cache["data"] = None
     main._tide_cache["data"] = None
     # No real internet in tests: every outside request fails unless a test replaces it with a fake
@@ -55,9 +61,10 @@ def fresh_start(monkeypatch):
 def client():
     with TestClient(main.app) as c:  # "with" runs the startup code (creates tables)
         conn = get_connection()
-        for table in ("reports", "alerts", "road_closures", "shelters", "grid_cells", "risk_log", "waterlogging_points"):
+        for table in ("reports", "alerts", "road_closures", "shelters", "grid_cells", "risk_log", "waterlogging_points", "photos"):
             conn.execute(f"DELETE FROM {table}")
-        conn.execute("INSERT OR REPLACE INTO admins (email, password_hash) VALUES (?, ?)",
+        conn.execute("INSERT INTO admins (email, password_hash) VALUES (?, ?) "
+                     "ON CONFLICT (email) DO UPDATE SET password_hash = excluded.password_hash",
                      ("admin@test.com", hash_password("correct-password")))
         conn.commit()
         conn.close()
@@ -255,7 +262,6 @@ def test_report_still_saved_when_street_lookup_fails(client, monkeypatch):
 def test_streets_are_grouped_and_verified_first(client, token):
     headers = {"Authorization": f"Bearer {token}"}
     # Two reports on Velachery Main Road (from two different people), one on Pallikaranai Road
-    main._report_times.clear()
     client.post("/api/reports", data=dict(GOOD_REPORT, water_depth_cm="20", severity="MODERATE"))
     client.post("/api/reports", data=dict(GOOD_REPORT, latitude="12.983", water_depth_cm="60", severity="SEVERE"),
                 headers={"X-Forwarded-For": "other"})

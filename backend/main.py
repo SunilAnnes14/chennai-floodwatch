@@ -20,7 +20,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -30,13 +30,15 @@ import forecast  # noqa: E402
 import routing  # noqa: E402
 import streets  # noqa: E402
 import terrain  # noqa: E402
-from auth import check_password, make_token, require_admin  # noqa: E402
+from auth import check_password, hash_password, make_token, require_admin  # noqa: E402
 from database import create_tables, get_connection  # noqa: E402
 from risk import calculate_risk  # noqa: E402
 from weather import WeatherError, get_weather, load_elevations  # noqa: E402
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
-MAX_PHOTO_MB = 5
+ON_VERCEL = bool(os.environ.get("VERCEL"))   # Vercel sets this automatically
+MAX_PHOTO_MB = 4      # Vercel accepts requests up to 4.5 MB
+MAX_PHOTO_PIXELS = 1600  # photos are shrunk to at most 1600 px wide/high (smaller database)
+REPORTS_PER_HOUR = 5     # rate limit per person
 SEVERITIES = ["LOW", "MODERATE", "HIGH", "SEVERE"]
 SEVERITY_ORDER = {"LOW": 1, "MODERATE": 2, "HIGH": 3, "SEVERE": 4}
 STATUSES = ["PENDING", "VERIFIED", "REJECTED", "RESOLVED"]
@@ -73,17 +75,42 @@ def run_terrain_build():
         terrain_status["running"] = False
 
 
+_started = {"done": False}
+
+
 @app.on_event("startup")
 def startup():
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    """Runs once when the server starts (online: once per new Vercel server)."""
+    if _started["done"]:
+        return
+    _started["done"] = True
     create_tables()
-    if os.environ.get("SKIP_ELEVATION") != "1":   # tests set this to stay offline
-        load_elevations()
-        conn = get_connection()
-        has_grid = conn.execute("SELECT COUNT(*) FROM grid_cells").fetchone()[0] > 0
-        conn.close()
-        if not has_grid:  # first start: build the susceptibility grid in the background
+    create_admin_from_settings()
+    if os.environ.get("SKIP_ELEVATION") == "1":   # tests set this to stay offline
+        return
+    load_elevations()
+    conn = get_connection()
+    has_grid = conn.execute("SELECT COUNT(*) FROM grid_cells").fetchone()[0] > 0
+    conn.close()
+    if not has_grid:
+        # The ready-made grid (data/grid_cells.json) loads in a second. Only if it is missing
+        # do we build it from scratch - in the background, and never on Vercel (no background work there).
+        if not terrain.load_saved_grid() and not ON_VERCEL:
             threading.Thread(target=run_terrain_build, daemon=True).start()
+
+
+def create_admin_from_settings():
+    """Online there is no terminal for create_admin.py, so an admin can come from the
+    ADMIN_EMAIL and ADMIN_PASSWORD settings (environment variables). Done only if that admin doesn't exist."""
+    email, password = os.environ.get("ADMIN_EMAIL", "").strip().lower(), os.environ.get("ADMIN_PASSWORD", "")
+    if not email or len(password) < 10:
+        return
+    conn = get_connection()
+    if not conn.execute("SELECT 1 FROM admins WHERE email = ?", (email,)).fetchone():
+        conn.execute("INSERT INTO admins (email, password_hash, created_at) VALUES (?, ?, ?)",
+                     (email, hash_password(password), now_text()))
+        conn.commit()
+    conn.close()
 
 
 # ======================================================================
@@ -156,12 +183,13 @@ def nearest_area(lat, lon, areas, max_m=6000):
 
 def create_auto_alert(conn, title, message, alert_type, source, area_id, dedupe_key, hours):
     """Create an automatic alert once (the dedupe_key stops duplicates). Returns its id or None."""
-    cursor = conn.execute(
-        """INSERT OR IGNORE INTO alerts (title, message, alert_type, source, created_at, area_id, expires_at,
-                                         is_automatic, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)""",
+    row = conn.execute(
+        """INSERT INTO alerts (title, message, alert_type, source, created_at, area_id, expires_at,
+                               is_automatic, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+           ON CONFLICT DO NOTHING RETURNING id""",
         (title, message, alert_type, source, now_text(), area_id,
-         (now() + timedelta(hours=hours)).isoformat(timespec="seconds"), dedupe_key))
-    return cursor.lastrowid if cursor.rowcount else None
+         (now() + timedelta(hours=hours)).isoformat(timespec="seconds"), dedupe_key)).fetchone()
+    return row["id"] if row else None  # no row = this alert already existed
 
 
 _place_cache = {}  # remembers places we already searched
@@ -443,7 +471,32 @@ def track_record():
 # DETECT
 # ======================================================================
 
-_report_times = {}  # recent report times per IP address, for rate limiting
+def client_ip(request):
+    """The visitor's IP address. Online, Vercel puts the real address in the x-forwarded-for header."""
+    if ON_VERCEL:
+        forwarded = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def save_photo(conn, image):
+    """Shrink the photo, save it as JPEG inside the database, and return its name."""
+    image.thumbnail((MAX_PHOTO_PIXELS, MAX_PHOTO_PIXELS))
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=82)
+    name = uuid.uuid4().hex + ".jpg"
+    conn.execute("INSERT INTO photos (name, data, created_at) VALUES (?, ?, ?)", (name, buffer.getvalue(), now_text()))
+    return name
+
+
+def load_photo(name):
+    conn = get_connection()
+    row = conn.execute("SELECT data FROM photos WHERE name = ?", (name,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Photo not found")
+    return Response(bytes(row["data"]), media_type="image/jpeg")
 
 
 @app.post("/api/reports", status_code=201)
@@ -457,7 +510,7 @@ async def create_report(
     description: str = Form("", max_length=1000),
     photo: UploadFile | None = File(None),
 ):
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
 
     # 1. Check the inputs
     if severity not in SEVERITIES:
@@ -465,15 +518,16 @@ async def create_report(
     if not in_chennai(latitude, longitude):
         raise HTTPException(422, "The location must be inside the Chennai area")
 
-    # 2. Rate limit: maximum 5 reports per hour from the same IP address
-    recent = [t for t in _report_times.get(ip, []) if time.time() - t < 3600]
-    if len(recent) >= 5:
-        raise HTTPException(429, "Too many reports. Please try again in an hour.")
-
-    # 3. Duplicate check: same person, within 100 m, in the last hour
+    # 2. Rate limit: maximum REPORTS_PER_HOUR reports per hour from the same IP address
+    #    (counted in the database, so it also works with many online servers)
     conn = get_connection()
     mine = conn.execute("SELECT * FROM reports WHERE reporter_ip = ? AND created_at > ?",
                         (ip, hours_ago(1))).fetchall()
+    if len(mine) >= REPORTS_PER_HOUR:
+        conn.close()
+        raise HTTPException(429, "Too many reports. Please try again in an hour.")
+
+    # 3. Duplicate check: same person, within 100 m, in the last hour
     for old in mine:
         if distance_m(latitude, longitude, old["latitude"], old["longitude"]) < 100:
             conn.close()
@@ -494,25 +548,23 @@ async def create_report(
         except Exception:
             conn.close()
             raise HTTPException(415, "Photo must be a JPG, PNG or WEBP image")
-        photo_name = uuid.uuid4().hex + ".jpg"
-        image.save(os.path.join(UPLOAD_DIR, photo_name), "JPEG", quality=85)
+        photo_name = save_photo(conn, image)
 
     # 5. Find which street this is (OpenStreetMap). If it fails, we still save the report.
     street = streets.find_street(latitude, longitude) or {}
     geometry = street.get("geometry")
 
     # 6. Save the report (always starts as PENDING)
-    cursor = conn.execute(
+    new_id = conn.execute(
         """INSERT INTO reports (location_text, latitude, longitude, water_depth_cm, severity, description,
                                 photo, reporter_ip, created_at, street_name, locality, street_geometry)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
         (location_text, latitude, longitude, water_depth_cm, severity, description, photo_name, ip, now_text(),
          street.get("street_name"), street.get("locality"), json.dumps(geometry) if geometry else None),
-    )
+    ).fetchone()["id"]
     conn.commit()
     conn.close()
-    _report_times[ip] = recent + [time.time()]
-    return {"id": cursor.lastrowid, "status": "PENDING", "street_name": street.get("street_name"),
+    return {"id": new_id, "status": "PENDING", "street_name": street.get("street_name"),
             "locality": street.get("locality"),
             "message": "Thank you! Your report will be checked by an admin before it is marked as verified."}
 
@@ -622,7 +674,7 @@ def report_photo(report_id: int):
     conn.close()
     if not row or not row["photo"] or row["status"] not in ("VERIFIED", "RESOLVED"):
         raise HTTPException(404, "Photo not found")
-    return FileResponse(os.path.join(UPLOAD_DIR, row["photo"]), media_type="image/jpeg")
+    return load_photo(row["photo"])
 
 
 # ======================================================================
@@ -771,7 +823,7 @@ def admin_photo(report_id: int, admin: str = Depends(require_admin)):
     conn.close()
     if not row or not row["photo"]:
         raise HTTPException(404, "No photo")
-    return FileResponse(os.path.join(UPLOAD_DIR, row["photo"]), media_type="image/jpeg")
+    return load_photo(row["photo"])
 
 
 class StatusChange(BaseModel):
@@ -847,13 +899,13 @@ def create_alert(data: AlertData, admin: str = Depends(require_admin)):
     if data.area_id is not None and not conn.execute("SELECT 1 FROM areas WHERE id = ?", (data.area_id,)).fetchone():
         conn.close()
         raise HTTPException(422, "Unknown area")
-    cursor = conn.execute(
+    new_id = conn.execute(
         "INSERT INTO alerts (title, message, alert_type, source, created_at, area_id, expires_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (data.title, data.message, data.alert_type, data.source, now_text(), data.area_id, expires))
+        "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        (data.title, data.message, data.alert_type, data.source, now_text(), data.area_id, expires)).fetchone()["id"]
     conn.commit()
     conn.close()
-    return {"id": cursor.lastrowid}
+    return {"id": new_id}
 
 
 @app.delete("/api/admin/alerts/{alert_id}")
@@ -878,13 +930,13 @@ def create_closure(data: ClosureData, admin: str = Depends(require_admin)):
     if not in_chennai(data.latitude, data.longitude):
         raise HTTPException(422, "The location must be inside the Chennai area")
     conn = get_connection()
-    cursor = conn.execute(
+    new_id = conn.execute(
         "INSERT INTO road_closures (road_name, latitude, longitude, reason, source, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (data.road_name, data.latitude, data.longitude, data.reason, data.source, now_text()))
+        "VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+        (data.road_name, data.latitude, data.longitude, data.reason, data.source, now_text())).fetchone()["id"]
     conn.commit()
     conn.close()
-    return {"id": cursor.lastrowid}
+    return {"id": new_id}
 
 
 @app.delete("/api/admin/road-closures/{closure_id}")
@@ -909,12 +961,13 @@ def create_shelter(data: ShelterData, admin: str = Depends(require_admin)):
     if not in_chennai(data.latitude, data.longitude):
         raise HTTPException(422, "The location must be inside the Chennai area")
     conn = get_connection()
-    cursor = conn.execute(
-        "INSERT INTO shelters (name, latitude, longitude, capacity, source, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (data.name, data.latitude, data.longitude, data.capacity, data.source, now_text()))
+    new_id = conn.execute(
+        "INSERT INTO shelters (name, latitude, longitude, capacity, source, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+        (data.name, data.latitude, data.longitude, data.capacity, data.source, now_text())).fetchone()["id"]
     conn.commit()
     conn.close()
-    return {"id": cursor.lastrowid}
+    return {"id": new_id}
 
 
 @app.delete("/api/admin/shelters/{shelter_id}")
@@ -1022,6 +1075,9 @@ def remove_waterlogging(point_id: int, admin: str = Depends(require_admin)):
 @app.post("/api/admin/terrain/rebuild")
 def rebuild_terrain(background: BackgroundTasks, admin: str = Depends(require_admin)):
     """Rebuild the susceptibility grid in the background (a few minutes)."""
+    if ON_VERCEL:
+        return {"started": False, "message": "Rebuilding is not possible on Vercel (no background work). Run "
+                "'python terrain.py' on your computer, commit backend/data/grid_cells.json and push."}
     if terrain_status["running"]:
         return {"started": False, "message": "Already building"}
     background.add_task(run_terrain_build)

@@ -12,9 +12,18 @@ import bcrypt
 import jwt
 from fastapi import Header, HTTPException
 
-# The secret used to sign tokens. Set JWT_SECRET in the .env file!
-SECRET = os.environ.get("JWT_SECRET", "change-this-secret-in-the-env-file")
+# The secret used to sign tokens. Set JWT_SECRET in the .env file (and in Vercel's settings)!
+DEFAULT_SECRET = "change-this-secret-in-the-env-file"
+SECRET = os.environ.get("JWT_SECRET", DEFAULT_SECRET)
 TOKEN_HOURS = 8
+
+
+def check_secret():
+    """Online, the default secret is public (it's on GitHub), so anyone could fake a login.
+    Admin login is switched off there until a real JWT_SECRET is set."""
+    if os.environ.get("VERCEL") and (SECRET == DEFAULT_SECRET or len(SECRET) < 32):
+        raise HTTPException(status_code=503,
+                            detail="Admin login is disabled: set a JWT_SECRET of at least 32 characters in Vercel")
 
 
 def hash_password(password):
@@ -26,12 +35,14 @@ def check_password(password, password_hash):
 
 
 def make_token(email):
+    check_secret()
     expires = datetime.now(timezone.utc) + timedelta(hours=TOKEN_HOURS)
     return jwt.encode({"sub": email, "exp": expires}, SECRET, algorithm="HS256")
 
 
 def require_admin(authorization: str = Header(default="")):
     """FastAPI runs this before every admin route. No valid token -> error 401."""
+    check_secret()
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Please log in")
     token = authorization.removeprefix("Bearer ")

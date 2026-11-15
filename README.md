@@ -67,7 +67,7 @@ Open **http://localhost:5173**. Admin login is at http://localhost:5173/admin.
 ## Running the tests
 
 ```bash
-cd backend  &&  .venv\Scripts\activate  &&  pytest -v     # 51 tests
+cd backend  &&  .venv\Scripts\activate  &&  pytest -v     # 60 tests
 cd frontend &&  npm test                                  # 37 tests
 ```
 
@@ -140,11 +140,37 @@ official waterlogging list (Admin → Data, CSV `name,latitude,longitude`) to im
 4. **Relief shelters** must be entered by admins from official lists; evacuation routing needs at least one.
 5. The OSRM and Nominatim servers are free demo services. For a real public launch, run your own.
 
-## Putting it online (simple version)
+## Putting it online with Vercel
 
-1. Build the website: `cd frontend && npm run build`. This creates `frontend/dist/`.
-2. Host `frontend/dist` on Netlify or Vercel, and the backend on Render or Railway (`uvicorn main:app --host 0.0.0.0 --port $PORT`).
-3. On the backend host, set `JWT_SECRET` and `FRONTEND_URL` (your website address).
-4. Make the website send `/api` requests to the backend address (for example with a Netlify redirect rule).
+The whole app (website + backend) runs on Vercel. Data is kept in a free **Neon PostgreSQL**
+database; on your computer the app keeps using SQLite. Report photos are stored in the database.
+
+1. **Import the project:** on [vercel.com](https://vercel.com) → **Add New… → Project** → import the
+   `chennai-floodwatch` GitHub repository. Keep the settings Vercel shows (they come from `vercel.json`).
+2. **Add settings** (Environment Variables) before clicking Deploy:
+
+   | Name | Value |
+   |---|---|
+   | `JWT_SECRET` | a long random text, e.g. from `python -c "import secrets; print(secrets.token_hex(32))"` |
+   | `ADMIN_EMAIL` | the email you will log in with |
+   | `ADMIN_PASSWORD` | at least 10 characters |
+
+3. **Deploy.** The website appears; the API answers "Database not connected" until step 4.
+4. **Connect the database:** project → **Storage → Create Database → Neon** (free) → connect it to the
+   project. This adds `DATABASE_URL` automatically.
+5. **Redeploy:** project → **Deployments → ⋯ → Redeploy**. Tables, the 8 areas, the terrain grid and
+   your admin account are created on the first request.
+
+After that, every `git push` to `main` deploys automatically.
+
+How it fits together: `vercel.json` builds `frontend/` and sends `/api/...` to `api/index.py`, which runs
+the FastAPI app from `backend/`. The root `requirements.txt` lists the backend packages for Vercel.
+
+Limits on Vercel: photos up to 4 MB; the terrain grid is loaded from `backend/data/grid_cells.json`
+(rebuild it on your computer with `python terrain.py`, then commit and push); browser notifications and
+caches work per visit; Open-Meteo, OSRM and Nominatim are free shared services and may occasionally
+refuse requests from busy cloud servers - the site then shows "service unavailable" instead of guessing.
+
+To test the backend against PostgreSQL locally: `set TEST_DATABASE_URL=postgresql://...` then `pytest`.
 
 ⚠️ This is a student project, **not** an official warning system. In an emergency, call **112**.

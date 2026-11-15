@@ -45,12 +45,13 @@ def add_report(ip, lat=12.98, lon=80.22, status="PENDING", created=None, verifie
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO reports (location_text, latitude, longitude, water_depth_cm, severity, status, reporter_ip,
-                                created_at, verified_at, street_name, locality) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                                created_at, verified_at, street_name, locality) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
         ("test place", lat, lon, depth, severity, status, ip, created or ago(0), verified,
          "Velachery Main Road", "Vijaya Nagar"))
+    new_id = cur.fetchone()["id"]
     conn.commit()
     conn.close()
-    return cur.lastrowid
+    return new_id
 
 
 def area_id(name):
