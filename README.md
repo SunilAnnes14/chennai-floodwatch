@@ -1,4 +1,6 @@
-# 🌊 Chennai FloodWatch
+# 🌊 CR7 Flows: Chennai Flood Watch
+
+Team **CR7 Flows**. Live site: **https://flows-cr7.vercel.app**
 
 A website that shows rainfall, flood reports, flood risk and road closures for Chennai.
 

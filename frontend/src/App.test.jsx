@@ -106,7 +106,7 @@ beforeEach(() => {
 
 describe("every page opens", () => {
   const pages = [
-    ["/", "Chennai FloodWatch"],
+    ["/", "CR7 Flows"],
     ["/map", "Live Flood Map"],
     ["/streets", "Affected Streets"],
     ["/weather", "Weather Monitoring"],
@@ -114,7 +114,7 @@ describe("every page opens", () => {
     ["/predictions", "Flood Predictions"],
     ["/routes", "Safe Routes"],
     ["/alerts", "Alerts"],
-    ["/about", "About Chennai FloodWatch"],
+    ["/about", "About CR7 Flows"],
     ["/admin", "Admin Login"],
   ];
   test.each(pages)("%s shows its heading", async (path, heading) => {
@@ -145,7 +145,7 @@ test("clear message when the backend is not running", async () => {
 test("every navigation link works", async () => {
   openPage("/");
   const nav = screen.getByRole("navigation");
-  const links = within(nav).getAllByRole("link").filter((a) => a.getAttribute("aria-label") !== "FloodWatch home");
+  const links = within(nav).getAllByRole("link").filter((a) => a.getAttribute("aria-label") !== "CR7 Flows home");
   for (const link of links) {
     fireEvent.click(link);
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();

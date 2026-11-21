@@ -19,8 +19,8 @@ const SOURCES = [
 export default function About() {
   return (
     <div className="max-w-4xl">
-      <PageHeader eyebrow="About" title="About Chennai FloodWatch"
-                  subtitle="A student project that brings together rainfall, citizen flood reports and road information for Chennai, Tamil Nadu." />
+      <PageHeader eyebrow="About" title="About CR7 Flows"
+                  subtitle="CR7 Flows is our team's student project that brings together rainfall, citizen flood reports and road information for Chennai, Tamil Nadu." />
 
       <div className="mb-6 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
         <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />

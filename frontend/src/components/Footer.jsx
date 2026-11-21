@@ -14,7 +14,7 @@ export default function Footer() {
     <footer className="mt-16 bg-navy-950 text-slate-400">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-3">
         <div>
-          <p className="flex items-center gap-2 font-display text-lg font-bold text-white"><Waves className="h-5 w-5 text-blue-400" /> FloodWatch Chennai</p>
+          <p className="flex items-center gap-2 font-display text-lg font-bold text-white"><Waves className="h-5 w-5 text-blue-400" /> CR7 Flows</p>
           <p className="mt-3 text-sm leading-relaxed">
             Predict → Detect → Alert. Rainfall, citizen flood reports and road information for Chennai.
             A student project, not an official government service.

@@ -25,12 +25,12 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-[1100] border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-        <NavLink to="/" className="flex items-center gap-2.5" aria-label="FloodWatch home">
+        <NavLink to="/" className="flex items-center gap-2.5" aria-label="CR7 Flows home">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-navy-900 to-blue-600 text-white shadow-md shadow-blue-900/20">
             <Waves className="h-5 w-5" />
           </span>
           <span className="leading-tight">
-            <span className="block font-display text-[15px] font-extrabold text-navy-900">FloodWatch</span>
+            <span className="block font-display text-[15px] font-extrabold text-navy-900">CR7 Flows</span>
             <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Chennai</span>
           </span>
         </NavLink>

@@ -37,7 +37,7 @@ export default function AdminLogin() {
         <div className="text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-navy-900 text-white shadow-md"><LockKeyhole className="h-5 w-5" /></span>
           <h1 className="mt-4 font-display text-2xl font-bold text-navy-900">Admin Login</h1>
-          <p className="mt-1 text-sm text-slate-500">For FloodWatch moderators only</p>
+          <p className="mt-1 text-sm text-slate-500">For CR7 Flows moderators only</p>
         </div>
         <div>
           <label className="label" htmlFor="email">Email</label>

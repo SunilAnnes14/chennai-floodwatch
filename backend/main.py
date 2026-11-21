@@ -48,7 +48,7 @@ ACTIVE_HOURS = 6         # a verified report counts as "flooded now" for 6 h, un
 LIKELY_REPORTERS = 3     # this many different people reporting the same street = "likely flooded"
 DANGEROUS_DEPTH_CM = 30  # general flood-safety guidance: ~30 cm of water can float a car
 
-app = FastAPI(title="Chennai FloodWatch API")
+app = FastAPI(title="CR7 Flows API (Chennai Flood Watch)")
 
 # Allow the React website (running on port 5173) to call this API
 app.add_middleware(
@@ -294,7 +294,7 @@ def compute_area_risk(data):
                 conn, f"High flood risk predicted for {a['name']}",
                 f"Our experimental model rates {a['name']} as {r['level'].replace('_', ' ')} risk ({r['reason']}). "
                 "This is a model prediction, not an official warning. Avoid low-lying roads and follow official advice.",
-                "PREDICTION", "FloodWatch experimental risk model (automatic)", a["area_id"],
+                "PREDICTION", "CR7 Flows experimental risk model (automatic)", a["area_id"],
                 f"risk:{a['area_id']}:{ist_today()}", 24)
     conn.commit()
     conn.close()
@@ -682,7 +682,7 @@ def affected_streets():
         "streets": result,
         "generated_at": now_text(),
         "active_hours": ACTIVE_HOURS,
-        "source": "FloodWatch citizen reports. Street names and shapes: © OpenStreetMap contributors (ODbL)",
+        "source": "CR7 Flows citizen reports. Street names and shapes: © OpenStreetMap contributors (ODbL)",
         "note": "Only streets that someone has reported are listed. A street that is not listed may still be flooded.",
     }
 
@@ -872,7 +872,7 @@ def change_report_status(report_id: int, data: StatusChange, admin: str = Depend
                 conn, f"Dangerous flooding verified: {where}",
                 f"An admin verified a citizen report of {report['water_depth_cm']} cm of water "
                 f"({report['severity'].lower()} severity) at {report['location_text']}. Avoid this road.",
-                "VERIFIED_REPORT", "FloodWatch verified citizen report (automatic)", area["id"] if area else None,
+                "VERIFIED_REPORT", "CR7 Flows verified citizen report (automatic)", area["id"] if area else None,
                 f"verified:{place}:{ist_today()}", ACTIVE_HOURS)
     else:
         conn.execute("UPDATE reports SET status = ? WHERE id = ?", (data.status, report_id))
@@ -1015,7 +1015,7 @@ def build_briefing():
         "road_closures": list_road_closures(),
         "shelters": list_shelters(),
         "active_alerts": list_alerts(),
-        "disclaimer": "Built from citizen reports verified by FloodWatch admins and an EXPERIMENTAL risk model. "
+        "disclaimer": "Built from citizen reports verified by CR7 Flows admins and an EXPERIMENTAL risk model. "
                       "Not an official assessment.",
     }
 

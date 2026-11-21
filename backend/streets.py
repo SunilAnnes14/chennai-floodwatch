@@ -18,7 +18,7 @@ import time
 import httpx
 
 NOMINATIM = "https://nominatim.openstreetmap.org"
-HEADERS = {"User-Agent": "ChennaiFloodWatch student project"}
+HEADERS = {"User-Agent": "CR7Flows Chennai flood watch student project"}
 KEEP_METRES = 150   # how much of the street around a report we highlight
 
 _last_request = [0.0]

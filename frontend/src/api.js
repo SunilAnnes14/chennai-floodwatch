@@ -11,7 +11,7 @@ export async function api(path, options = {}) {
   try {
     response = await fetch(path, { ...options, headers });
   } catch {
-    throw new Error("Cannot reach the FloodWatch server. Is the backend running?");
+    throw new Error("Cannot reach the CR7 Flows server. Is the backend running?");
   }
   const text = await response.text();
   let data = {};

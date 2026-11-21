@@ -38,9 +38,9 @@ export default function Home() {
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-emerald-300 ring-1 ring-white/15">
               <LiveDot label={weather.data ? `Live · updated ${formatLocal(weather.data.updated_at)} IST` : "Connecting..."} />
             </div>
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">Chennai FloodWatch</h1>
+            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">CR7 Flows</h1>
             <p className="mt-4 max-w-xl text-lg text-slate-300">
-              See rain coming, spot flooded streets as they are reported, and get clear alerts, neighbourhood by neighbourhood.
+              Chennai's flood watch: see rain coming, spot flooded streets as they are reported, and get clear alerts, neighbourhood by neighbourhood.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link to="/report" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-navy-900 shadow-lg transition hover:bg-blue-50 active:scale-[.98]">
